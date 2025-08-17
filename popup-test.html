@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClipMaster Pro - Test Version</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="clipmaster-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-title">
+                <h1>ClipMaster Pro</h1>
+                <span class="version">v1.0.0</span>
+            </div>
+        </header>
+
+        <!-- Search Section -->
+        <section class="search-section">
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="Search clipboard history..." autocomplete="off">
+                <button id="advanced-filters-toggle" class="icon-btn" title="Advanced Filters">
+                    <span class="icon">🔍</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Advanced Filters Panel -->
+        <div id="advanced-filters" class="advanced-filters hidden">
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label for="filter-type">Type:</label>
+                    <select id="filter-type">
+                        <option value="">All Types</option>
+                        <option value="text">Text</option>
+                        <option value="url">URLs</option>
+                        <option value="code">Code</option>
+                        <option value="email">Email</option>
+                        <option value="phone">Phone</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="filter-date">Date:</label>
+                    <select id="filter-date">
+                        <option value="">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label for="filter-source">Source:</label>
+                    <select id="filter-source">
+                        <option value="">All Sources</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="filter-length">Length:</label>
+                    <select id="filter-length">
+                        <option value="">Any Length</option>
+                        <option value="short">Short (< 100 chars)</option>
+                        <option value="medium">Medium (100-500 chars)</option>
+                        <option value="long">Long (> 500 chars)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="custom-date-range hidden" id="custom-date-range">
+                <div class="filter-group">
+                    <label for="date-from">From:</label>
+                    <input type="date" id="date-from">
+                </div>
+                <div class="filter-group">
+                    <label for="date-to">To:</label>
+                    <input type="date" id="date-to">
+                </div>
+            </div>
+            
+            <div class="filter-actions">
+                <button id="apply-filters" class="btn-primary">Apply Filters</button>
+                <button id="clear-filters" class="btn-secondary">Clear All</button>
+                <span id="filter-results-count" class="filter-count"></span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="tab-navigation">
+            <button class="tab-btn active" data-tab="recent">Recent</button>
+            <button class="tab-btn" data-tab="favorites">Favorites</button>
+            <button class="tab-btn" data-tab="categories">Categories</button>
+            <button class="tab-btn" data-tab="templates">Templates</button>
+            <button class="tab-btn" data-tab="analytics">Analytics</button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="clipmaster-main">
+            <!-- Recent Tab -->
+            <div id="recent-tab" class="tab-content active">
+                <div id="clipboard-list" class="clipboard-list">
+                    <!-- Clipboard items will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Favorites Tab -->
+            <div id="favorites-tab" class="tab-content">
+                <div id="favorites-list" class="clipboard-list">
+                    <!-- Favorite items will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Categories Tab -->
+            <div id="categories-tab" class="tab-content">
+                <div class="category-grid">
+                    <div class="category-card" data-category="text">
+                        <span class="category-icon">📝</span>
+                        <span class="category-name">Text</span>
+                        <span class="category-count" id="text-count">0</span>
+                    </div>
+                    <div class="category-card" data-category="url">
+                        <span class="category-icon">🔗</span>
+                        <span class="category-name">URLs</span>
+                        <span class="category-count" id="url-count">0</span>
+                    </div>
+                    <div class="category-card" data-category="code">
+                        <span class="category-icon">💻</span>
+                        <span class="category-name">Code</span>
+                        <span class="category-count" id="code-count">0</span>
+                    </div>
+                    <div class="category-card" data-category="email">
+                        <span class="category-icon">📧</span>
+                        <span class="category-name">Email</span>
+                        <span class="category-count" id="email-count">0</span>
+                    </div>
+                    <div class="category-card" data-category="phone">
+                        <span class="category-icon">📞</span>
+                        <span class="category-name">Phone</span>
+                        <span class="category-count" id="phone-count">0</span>
+                    </div>
+                </div>
+                <div id="category-items" class="clipboard-list">
+                    <!-- Category-filtered items will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Templates Tab -->
+            <div id="templates-tab" class="tab-content">
+                <div class="templates-header">
+                    <button id="add-template" class="btn-primary">+ New Template</button>
+                </div>
+                <div id="templates-list" class="templates-list">
+                    <!-- Templates will be inserted here -->
+                </div>
+                <div class="templates-help">
+                    <h4>Template Variables</h4>
+                    <p>Use these variables in your templates:</p>
+                    <ul>
+                        <li><code>{{name}}</code> - Your name</li>
+                        <li><code>{{email}}</code> - Your email</li>
+                        <li><code>{{date}}</code> - Current date</li>
+                        <li><code>{{time}}</code> - Current time</li>
+                        <li><code>{{company}}</code> - Company name</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div id="analytics-tab" class="tab-content">
+                <div class="analytics-dashboard">
+                    <div class="stats-overview">
+                        <div class="stat-card">
+                            <div class="stat-value" id="total-clips">0</div>
+                            <div class="stat-label">Total Clips</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="today-clips">0</div>
+                            <div class="stat-label">Today</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="avg-daily">0</div>
+                            <div class="stat-label">Avg/Day</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="top-type">Text</div>
+                            <div class="stat-label">Top Type</div>
+                        </div>
+                    </div>
+                    
+                    <div class="analytics-section">
+                        <h4>Content Type Distribution</h4>
+                        <div class="chart-container">
+                            <div id="type-chart" class="bar-chart"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="empty-state hidden">
+            <div class="empty-icon">📋</div>
+            <h3>No Clipboard History Yet</h3>
+            <p>Start copying text and it will appear here automatically!</p>
+            <button id="demo-items" class="btn-primary">Add Demo Items</button>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-stats">
+                <span id="total-items">0 items</span>
+                <span class="separator">•</span>
+                <span id="storage-usage">0% used</span>
+            </div>
+            <div class="footer-actions">
+                <button id="export-data" class="btn-link">Export</button>
+                <button id="settings-btn" class="btn-link">Settings</button>
+                <button id="help-btn" class="btn-link">Help</button>
+            </div>
+        </footer>
+
+        <!-- Loading Spinner -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <span>Loading...</span>
+        </div>
+
+        <!-- Cloud Sync Settings Modal -->
+        <div id="cloud-sync-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Settings & Cloud Sync</h3>
+                    <button id="cloud-sync-close" class="icon-btn">
+                        <span class="icon">✕</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="cloud-sync-status">
+                        <div class="sync-status-card">
+                            <div class="sync-status-icon" id="sync-status-icon">☁️</div>
+                            <div class="sync-status-info">
+                                <h4 id="sync-status-title">Cloud Sync Disabled</h4>
+                                <p id="sync-status-description">Your clipboard data is stored locally only</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cloud-sync-controls">
+                        <div class="sync-toggle-section">
+                            <label class="toggle-label">
+                                <input type="checkbox" id="cloud-sync-toggle" disabled>
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-text">Enable Cloud Sync</span>
+                            </label>
+                            <p class="sync-feature-note">Premium feature - Sync across all your devices securely</p>
+                        </div>
+
+                        <div class="sync-info-section" id="sync-info-section" style="display: none;">
+                            <div class="sync-info-item">
+                                <span class="sync-info-label">Last Sync:</span>
+                                <span id="last-sync-time">Never</span>
+                            </div>
+                            <div class="sync-info-item">
+                                <span class="sync-info-label">Connected Devices:</span>
+                                <span id="device-count">1</span>
+                            </div>
+                            <div class="sync-info-item">
+                                <span class="sync-info-label">Device ID:</span>
+                                <span id="device-id-display">--</span>
+                            </div>
+                        </div>
+
+                        <div class="sync-actions">
+                            <button id="manual-sync-btn" class="btn-secondary" disabled>
+                                <span class="icon">🔄</span> Sync Now
+                            </button>
+                            <button id="clear-cloud-data-btn" class="btn-danger" disabled>
+                                <span class="icon">🗑️</span> Clear Cloud Data
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="sync-security-info">
+                        <h5>🔒 Security & Privacy</h5>
+                        <ul>
+                            <li>All data is encrypted end-to-end before leaving your device</li>
+                            <li>We cannot read your clipboard content - only you have the keys</li>
+                            <li>Data is synchronized securely between your authorized devices only</li>
+                            <li>You can disable sync and delete cloud data at any time</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cloud-sync-save" class="btn-primary">Save Settings</button>
+                    <button id="cloud-sync-cancel" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts - Test version without ExtensionPay -->
+    <script src="payment.js"></script>
+    <script src="cloud-sync.js"></script>
+    <script src="onboarding.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

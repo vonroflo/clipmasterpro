@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ClipMaster Pro Icon Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        canvas { border: 1px solid #ccc; margin: 10px; }
+        .icon-set { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>ClipMaster Pro Icon Generator</h1>
+    <p>This will generate PNG icons for the extension. Open this in a browser and right-click to save each icon.</p>
+    
+    <div class="icon-set">
+        <h3>16x16 Icon</h3>
+        <canvas id="icon16" width="16" height="16"></canvas>
+    </div>
+    
+    <div class="icon-set">
+        <h3>32x32 Icon</h3>
+        <canvas id="icon32" width="32" height="32"></canvas>
+    </div>
+    
+    <div class="icon-set">
+        <h3>48x48 Icon</h3>
+        <canvas id="icon48" width="48" height="48"></canvas>
+    </div>
+    
+    <div class="icon-set">
+        <h3>128x128 Icon</h3>
+        <canvas id="icon128" width="128" height="128"></canvas>
+    </div>
+
+    <script>
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#2563eb');
+            gradient.addColorStop(1, '#1d4ed8');
+            
+            // Draw background circle
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2 - 1, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw clipboard icon
+            ctx.strokeStyle = 'white';
+            ctx.fillStyle = 'white';
+            ctx.lineWidth = Math.max(1, size / 16);
+            
+            // Scale measurements based on icon size
+            const scale = size / 48;
+            const centerX = size / 2;
+            const centerY = size / 2;
+            
+            // Clipboard board
+            const boardWidth = 20 * scale;
+            const boardHeight = 24 * scale;
+            const boardX = centerX - boardWidth / 2;
+            const boardY = centerY - boardHeight / 2;
+            
+            ctx.strokeRect(boardX, boardY, boardWidth, boardHeight);
+            ctx.fillRect(boardX, boardY, boardWidth, boardHeight);
+            
+            // Clipboard clip
+            const clipWidth = 8 * scale;
+            const clipHeight = 4 * scale;
+            const clipX = centerX - clipWidth / 2;
+            const clipY = boardY - clipHeight / 2;
+            
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(clipX, clipY, clipWidth, clipHeight);
+            
+            // Document lines
+            ctx.strokeStyle = '#2563eb';
+            ctx.lineWidth = Math.max(0.5, size / 32);
+            
+            for (let i = 0; i < 3; i++) {
+                const lineY = boardY + (6 + i * 4) * scale;
+                ctx.beginPath();
+                ctx.moveTo(boardX + 3 * scale, lineY);
+                ctx.lineTo(boardX + boardWidth - 3 * scale, lineY);
+                ctx.stroke();
+            }
+        }
+        
+        // Generate all icon sizes
+        drawIcon(document.getElementById('icon16'), 16);
+        drawIcon(document.getElementById('icon32'), 32);
+        drawIcon(document.getElementById('icon48'), 48);
+        drawIcon(document.getElementById('icon128'), 128);
+        
+        // Function to download canvas as PNG
+        function downloadCanvas(canvas, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        // Add download buttons
+        document.body.innerHTML += `
+            <div style="margin-top: 20px;">
+                <h3>Download Icons</h3>
+                <button onclick="downloadCanvas(document.getElementById('icon16'), 'icon-16.png')">Download 16x16</button>
+                <button onclick="downloadCanvas(document.getElementById('icon32'), 'icon-32.png')">Download 32x32</button>
+                <button onclick="downloadCanvas(document.getElementById('icon48'), 'icon-48.png')">Download 48x48</button>
+                <button onclick="downloadCanvas(document.getElementById('icon128'), 'icon-128.png')">Download 128x128</button>
+                <br><br>
+                <button onclick="
+                    downloadCanvas(document.getElementById('icon16'), 'icon-16.png');
+                    setTimeout(() => downloadCanvas(document.getElementById('icon32'), 'icon-32.png'), 500);
+                    setTimeout(() => downloadCanvas(document.getElementById('icon48'), 'icon-48.png'), 1000);
+                    setTimeout(() => downloadCanvas(document.getElementById('icon128'), 'icon-128.png'), 1500);
+                ">Download All Icons</button>
+            </div>
+        `;
+    </script>
+</body>
+</html>

@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClipMaster Pro</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="clipmaster-container">
+        <!-- Header -->
+        <header class="clipmaster-header">
+            <div class="header-title">
+                <h1>ClipMaster Pro</h1>
+                <div class="header-controls">
+                    <button id="theme-toggle" class="icon-btn" title="Toggle Theme">
+                        <span class="icon">🌙</span>
+                    </button>
+                    <button id="settings-btn" class="icon-btn" title="Settings">
+                        <span class="icon">⚙️</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Search Bar -->
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="Search clipboard history..." autocomplete="off">
+                <button id="search-clear" class="icon-btn">
+                    <span class="icon">✕</span>
+                </button>
+                <button id="advanced-filters-toggle" class="icon-btn" title="Advanced Filters">
+                    <span class="icon">🔍</span>
+                </button>
+            </div>
+            
+            <!-- Advanced Filters Panel -->
+            <div id="advanced-filters" class="advanced-filters hidden">
+                <div class="filters-row">
+                    <div class="filter-group">
+                        <label>Type:</label>
+                        <select id="filter-type">
+                            <option value="">All Types</option>
+                            <option value="text">Text</option>
+                            <option value="url">URLs</option>
+                            <option value="code">Code</option>
+                            <option value="email">Email</option>
+                            <option value="phone">Phone</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Date:</label>
+                        <select id="filter-date">
+                            <option value="">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="custom">Custom Range</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filters-row">
+                    <div class="filter-group">
+                        <label>Source:</label>
+                        <select id="filter-source">
+                            <option value="">All Sources</option>
+                            <!-- Dynamically populated -->
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Length:</label>
+                        <select id="filter-length">
+                            <option value="">Any Length</option>
+                            <option value="short">Short (< 50 chars)</option>
+                            <option value="medium">Medium (50-200 chars)</option>
+                            <option value="long">Long (> 200 chars)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filters-row" id="custom-date-range" style="display: none;">
+                    <div class="filter-group">
+                        <label>From:</label>
+                        <input type="date" id="date-from">
+                    </div>
+                    <div class="filter-group">
+                        <label>To:</label>
+                        <input type="date" id="date-to">
+                    </div>
+                </div>
+                <div class="filters-actions">
+                    <button id="apply-filters" class="btn-primary">Apply Filters</button>
+                    <button id="clear-filters" class="btn-secondary">Clear All</button>
+                    <div class="filter-results">
+                        <span id="filter-results-count">0 items match</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="clipmaster-nav">
+            <button class="nav-tab active" data-tab="recent">Recent</button>
+            <button class="nav-tab" data-tab="favorites">Favorites</button>
+            <button class="nav-tab" data-tab="categories">Categories</button>
+            <button class="nav-tab" data-tab="templates">Templates</button>
+            <button class="nav-tab" data-tab="analytics">Analytics</button>
+        </nav>
+
+        <!-- Content Area -->
+        <main class="clipmaster-main">
+            <!-- Recent Tab -->
+            <div class="tab-content active" id="recent-tab">
+                <div class="tab-header">
+                    <span class="tab-title">Recent Clips</span>
+                    <button id="clear-all" class="btn-secondary">Clear All</button>
+                </div>
+                <div id="clipboard-list" class="clipboard-list">
+                    <!-- Clipboard items will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Favorites Tab -->
+            <div class="tab-content" id="favorites-tab">
+                <div class="tab-header">
+                    <span class="tab-title">Favorite Clips</span>
+                    <span class="item-count" id="favorites-count">0 items</span>
+                </div>
+                <div id="favorites-list" class="clipboard-list">
+                    <!-- Favorite items will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Categories Tab -->
+            <div class="tab-content" id="categories-tab">
+                <div class="tab-header">
+                    <span class="tab-title">Categories</span>
+                </div>
+                <div class="categories-grid">
+                    <div class="category-card" data-category="text">
+                        <span class="category-icon">📝</span>
+                        <span class="category-name">Text</span>
+                        <span class="category-count" id="text-count">0</span>
+                    </div>
+                    <div class="category-card" data-category="url">
+                        <span class="category-icon">🔗</span>
+                        <span class="category-name">URLs</span>
+                        <span class="category-count" id="url-count">0</span>
+                    </div>
+                    <div class="category-card" data-category="code">
+                        <span class="category-icon">💻</span>
+                        <span class="category-name">Code</span>
+                        <span class="category-count" id="code-count">0</span>
+                    </div>
+                    <div class="category-card" data-category="email">
+                        <span class="category-icon">📧</span>
+                        <span class="category-name">Email</span>
+                        <span class="category-count" id="email-count">0</span>
+                    </div>
+                </div>
+                <div id="category-items" class="clipboard-list">
+                    <!-- Category-filtered items will be shown here -->
+                </div>
+            </div>
+
+            <!-- Templates Tab -->
+            <div class="tab-content" id="templates-tab">
+                <div class="tab-header">
+                    <span class="tab-title">Text Templates</span>
+                    <button id="add-template" class="btn-primary">+ New Template</button>
+                </div>
+                <div id="templates-list" class="clipboard-list">
+                    <!-- Templates will be dynamically inserted here -->
+                </div>
+                <div class="templates-help">
+                    <div class="help-section">
+                        <h4>Template Variables</h4>
+                        <p>Use <code>{{variable}}</code> syntax for dynamic content:</p>
+                        <ul>
+                            <li><code>{{name}}</code> - Person's name</li>
+                            <li><code>{{email}}</code> - Email address</li>
+                            <li><code>{{date}}</code> - Current date</li>
+                            <li><code>{{time}}</code> - Current time</li>
+                            <li><code>{{company}}</code> - Company name</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div class="tab-content" id="analytics-tab">
+                <div class="tab-header">
+                    <span class="tab-title">Usage Analytics</span>
+                    <button id="reset-analytics" class="btn-secondary">Reset Stats</button>
+                </div>
+                <div class="analytics-dashboard">
+                    <div class="stats-overview">
+                        <div class="stat-card">
+                            <div class="stat-number" id="total-clips">0</div>
+                            <div class="stat-label">Total Clips</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="clips-today">0</div>
+                            <div class="stat-label">Today</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="avg-daily">0</div>
+                            <div class="stat-label">Avg/Day</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="most-used-type">Text</div>
+                            <div class="stat-label">Top Type</div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-section">
+                        <h4>Content Type Distribution</h4>
+                        <div class="chart-container">
+                            <div class="bar-chart" id="type-chart">
+                                <!-- Chart bars will be generated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-section">
+                        <h4>Daily Activity (Last 7 Days)</h4>
+                        <div class="chart-container">
+                            <div class="line-chart" id="activity-chart">
+                                <!-- Activity chart will be generated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-section">
+                        <h4>Most Active Sources</h4>
+                        <div class="source-list" id="source-stats">
+                            <!-- Source statistics will be generated dynamically -->
+                        </div>
+                    </div>
+
+                    <div class="analytics-section">
+                        <h4>Template Usage</h4>
+                        <div class="template-stats" id="template-usage-stats">
+                            <!-- Template usage statistics -->
+                        </div>
+                    </div>
+
+                    <div class="analytics-section">
+                        <h4>Productivity Insights</h4>
+                        <div class="insights-list" id="productivity-insights">
+                            <!-- AI-powered insights -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h3>No clipboard items yet</h3>
+            <p>Start copying text, URLs, or code and they'll appear here automatically</p>
+            <div class="empty-actions">
+                <button id="paste-current" class="btn-primary">Paste Current Clipboard</button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="clipmaster-footer">
+            <div class="footer-stats">
+                <span id="total-items">0 items</span>
+                <span class="separator">•</span>
+                <span id="storage-usage">0% used</span>
+            </div>
+            <div class="footer-actions">
+                <button id="export-data" class="btn-link">Export</button>
+                <button id="settings-btn" class="btn-link">Settings</button>
+                <button id="help-btn" class="btn-link">Help</button>
+            </div>
+        </footer>
+
+        <!-- Loading Spinner -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button id="settings-close" class="icon-btn">
+                    <span class="icon">✕</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>Maximum History Items</label>
+                    <select id="max-items-setting">
+                        <option value="20">20 items (Free)</option>
+                        <option value="50">50 items</option>
+                        <option value="100">100 items</option>
+                        <option value="unlimited">Unlimited (Premium)</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="auto-categorize"> 
+                        Auto-categorize clipboard items
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="show-previews"> 
+                        Show content previews
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="sound-notifications"> 
+                        Sound notifications
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="settings-save" class="btn-primary">Save Settings</button>
+                <button id="settings-cancel" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Modal -->
+    <div id="template-modal" class="modal hidden">
+        <div class="modal-content template-modal">
+            <div class="modal-header">
+                <h3 id="template-modal-title">Create New Template</h3>
+                <button id="template-close" class="icon-btn">
+                    <span class="icon">✕</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label for="template-name">Template Name</label>
+                    <input type="text" id="template-name" placeholder="e.g., Email Reply, Meeting Request">
+                </div>
+                <div class="setting-group">
+                    <label for="template-description">Description (Optional)</label>
+                    <input type="text" id="template-description" placeholder="Brief description of this template">
+                </div>
+                <div class="setting-group">
+                    <label for="template-content">Template Content</label>
+                    <textarea id="template-content" rows="8" placeholder="Enter your template text here. Use {{variable}} for dynamic content.
+
+Example:
+Hi {{name}},
+
+Thanks for your message. I'll get back to you by {{date}}.
+
+Best regards,
+{{myname}}"></textarea>
+                </div>
+                <div class="setting-group">
+                    <label for="template-shortcut">Keyboard Shortcut (Optional)</label>
+                    <input type="text" id="template-shortcut" placeholder="e.g., Ctrl+1, Alt+E" readonly>
+                    <small>Click to record shortcut combination</small>
+                </div>
+                <div class="template-variables">
+                    <label>Quick Variables:</label>
+                    <div class="variable-buttons">
+                        <button class="var-btn" data-var="{{name}}">{{name}}</button>
+                        <button class="var-btn" data-var="{{email}}">{{email}}</button>
+                        <button class="var-btn" data-var="{{date}}">{{date}}</button>
+                        <button class="var-btn" data-var="{{time}}">{{time}}</button>
+                        <button class="var-btn" data-var="{{company}}">{{company}}</button>
+                        <button class="var-btn" data-var="{{myname}}">{{myname}}</button>
+                    </div>
+                </div>
+                <div class="template-preview">
+                    <label>Preview:</label>
+                    <div id="template-preview-content" class="preview-content">
+                        Enter template content to see preview...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="template-save" class="btn-primary">Save Template</button>
+                <button id="template-cancel" class="btn-secondary">Cancel</button>
+                <button id="template-delete" class="btn-danger hidden">Delete Template</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Variable Input Modal -->
+    <div id="variable-modal" class="modal hidden">
+        <div class="modal-content variable-modal">
+            <div class="modal-header">
+                <h3>Template Variables</h3>
+                <button id="variable-close" class="icon-btn">
+                    <span class="icon">✕</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Fill in the variables for this template:</p>
+                <div id="variable-inputs" class="variable-inputs">
+                    <!-- Variable inputs will be dynamically generated -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="variable-apply" class="btn-primary">Apply & Copy</button>
+                <button id="variable-cancel" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Premium Upgrade Modal -->
+    <div id="premium-modal" class="modal hidden">
+        <div class="modal-content premium-modal">
+            <div class="modal-header">
+                <h3>Upgrade to Premium</h3>
+                <button id="premium-close" class="icon-btn">
+                    <span class="icon">✕</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="premium-hero">
+                    <div class="premium-icon">👑</div>
+                    <h4 id="premium-feature-title">Unlock Premium Features</h4>
+                    <p id="premium-feature-description">Get access to advanced productivity tools</p>
+                </div>
+
+                <div class="premium-benefits">
+                    <div class="benefit-item">
+                        <span class="benefit-icon">∞</span>
+                        <div class="benefit-text">
+                            <strong>Unlimited Clipboard History</strong>
+                            <span>Store 1000+ items vs 20 in free</span>
+                        </div>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-icon">🔍</span>
+                        <div class="benefit-text">
+                            <strong>Advanced Search & Filters</strong>
+                            <span>Date ranges, regex, smart filters</span>
+                        </div>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-icon">📋</span>
+                        <div class="benefit-text">
+                            <strong>Unlimited Templates</strong>
+                            <span>Create 100+ templates vs 3 in free</span>
+                        </div>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-icon">☁️</span>
+                        <div class="benefit-text">
+                            <strong>Cloud Sync</strong>
+                            <span>Access across all your devices</span>
+                        </div>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-icon">📊</span>
+                        <div class="benefit-text">
+                            <strong>Analytics Dashboard</strong>
+                            <span>Productivity insights & metrics</span>
+                        </div>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-icon">🚀</span>
+                        <div class="benefit-text">
+                            <strong>Priority Support</strong>
+                            <span>24-hour response time</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="premium-pricing">
+                    <div class="pricing-option recommended">
+                        <div class="pricing-badge">Best Value</div>
+                        <div class="pricing-plan">Annual Plan</div>
+                        <div class="pricing-price">$24.99<span>/year</span></div>
+                        <div class="pricing-savings">Save 30%</div>
+                    </div>
+                    <div class="pricing-option">
+                        <div class="pricing-plan">Monthly Plan</div>
+                        <div class="pricing-price">$2.99<span>/month</span></div>
+                    </div>
+                </div>
+
+                <div class="premium-trial" id="premium-trial-info">
+                    <div class="trial-badge">Free Trial</div>
+                    <div class="trial-text">
+                        <span id="trial-days">7</span> days remaining in your free trial
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="premium-upgrade" class="btn-premium">Start Premium - $2.99/month</button>
+                <button id="premium-cancel" class="btn-secondary">Maybe Later</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature Limit Notification -->
+    <div id="limit-notification" class="notification hidden">
+        <div class="notification-content">
+            <div class="notification-icon">⚠️</div>
+            <div class="notification-text">
+                <strong id="limit-title">Free Limit Reached</strong>
+                <p id="limit-description">Upgrade to premium for unlimited access</p>
+            </div>
+            <div class="notification-actions">
+                <button id="limit-upgrade" class="btn-small btn-primary">Upgrade</button>
+                <button id="limit-dismiss" class="btn-small btn-secondary">Dismiss</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cloud Sync Settings Modal -->
+    <div id="cloud-sync-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Cloud Sync Settings</h3>
+                <button id="cloud-sync-close" class="icon-btn">
+                    <span class="icon">✕</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="cloud-sync-status">
+                    <div class="sync-status-card">
+                        <div class="sync-status-icon" id="sync-status-icon">☁️</div>
+                        <div class="sync-status-info">
+                            <h4 id="sync-status-title">Cloud Sync Disabled</h4>
+                            <p id="sync-status-description">Your clipboard data is stored locally only</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cloud-sync-controls">
+                    <div class="sync-toggle-section">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="cloud-sync-toggle" disabled>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">Enable Cloud Sync</span>
+                        </label>
+                        <p class="sync-feature-note">Premium feature - Sync across all your devices securely</p>
+                    </div>
+
+                    <div class="sync-info-section" id="sync-info-section" style="display: none;">
+                        <div class="sync-info-item">
+                            <span class="sync-info-label">Last Sync:</span>
+                            <span id="last-sync-time">Never</span>
+                        </div>
+                        <div class="sync-info-item">
+                            <span class="sync-info-label">Connected Devices:</span>
+                            <span id="device-count">1</span>
+                        </div>
+                        <div class="sync-info-item">
+                            <span class="sync-info-label">Device ID:</span>
+                            <span id="device-id-display">--</span>
+                        </div>
+                    </div>
+
+                    <div class="sync-actions">
+                        <button id="manual-sync-btn" class="btn-secondary" disabled>
+                            <span class="icon">🔄</span> Sync Now
+                        </button>
+                        <button id="clear-cloud-data-btn" class="btn-danger" disabled>
+                            <span class="icon">🗑️</span> Clear Cloud Data
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sync-security-info">
+                    <h5>🔒 Security & Privacy</h5>
+                    <ul>
+                        <li>All data is encrypted end-to-end before leaving your device</li>
+                        <li>We cannot read your clipboard content - only you have the keys</li>
+                        <li>Data is synchronized securely between your authorized devices only</li>
+                        <li>You can disable sync and delete cloud data at any time</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cloud-sync-save" class="btn-primary">Save Settings</button>
+                <button id="cloud-sync-cancel" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="payment.js"></script>
+    <script src="cloud-sync.js"></script>
+    <script src="onboarding.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
