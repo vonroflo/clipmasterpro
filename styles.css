@@ -255,7 +255,9 @@ body {
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  overflow-x: auto;
 }
+
 
 .nav-tab {
   flex: 1;
@@ -293,7 +295,7 @@ body {
   display: none;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .tab-content.active {
@@ -798,12 +800,13 @@ body {
   width: 90%;
   max-width: 400px;
   max-height: 80vh;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .template-modal {
   max-width: 500px;
   max-height: 90vh;
+  overflow: auto;
 }
 
 .variable-modal {
@@ -1601,32 +1604,49 @@ body {
 
 /* Scrollbar Styling */
 .clipboard-list::-webkit-scrollbar,
-.content-full::-webkit-scrollbar {
+.content-full::-webkit-scrollbar,
+.tab-content::-webkit-scrollbar,
+.clipmaster-nav::-webkit-scrollbar,
+.template-modal::-webkit-scrollbar,
+.modal-content::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 .clipboard-list::-webkit-scrollbar-track,
-.content-full::-webkit-scrollbar-track {
+.content-full::-webkit-scrollbar-track,
+.tab-content::-webkit-scrollbar-track,
+.clipmaster-nav::-webkit-scrollbar-track,
+.template-modal::-webkit-scrollbar-track,
+.modal-content::-webkit-scrollbar-track {
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
 }
 
 .clipboard-list::-webkit-scrollbar-thumb,
-.content-full::-webkit-scrollbar-thumb {
+.content-full::-webkit-scrollbar-thumb,
+.tab-content::-webkit-scrollbar-thumb,
+.clipmaster-nav::-webkit-scrollbar-thumb,
+.template-modal::-webkit-scrollbar-thumb,
+.modal-content::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: var(--radius-sm);
 }
 
 .clipboard-list::-webkit-scrollbar-thumb:hover,
-.content-full::-webkit-scrollbar-thumb:hover {
+.content-full::-webkit-scrollbar-thumb:hover,
+.tab-content::-webkit-scrollbar-thumb:hover,
+.clipmaster-nav::-webkit-scrollbar-thumb:hover,
+.template-modal::-webkit-scrollbar-thumb:hover,
+.modal-content::-webkit-scrollbar-thumb:hover {
   background: var(--border-hover);
 }
 
 /* Responsive Adjustments */
 @media (max-width: 400px) {
-  body {
+  /* body {
     width: 100vw;
-  }
+  } */
   
   .clipmaster-container {
     width: 100%;
