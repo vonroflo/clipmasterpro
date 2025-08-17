@@ -27,6 +27,24 @@ class ClipMasterPopup {
       theme: 'auto'
     };
 
+    // Performance optimization properties
+    this.virtualScrolling = {
+      itemHeight: 80, // Average height per item
+      visibleItems: 0,
+      scrollTop: 0,
+      startIndex: 0,
+      endIndex: 0,
+      bufferSize: 5 // Extra items to render for smooth scrolling
+    };
+    this.domCache = new Map(); // Cache DOM elements for reuse
+    this.renderQueue = []; // Queue for batched DOM updates
+    this.isRendering = false;
+
+    // Bulk operations state
+    this.bulkMode = false;
+    this.selectedItems = new Set();
+    this.bulkExportFormats = ['txt', 'csv', 'json'];
+
     this.init();
   }
 
@@ -399,6 +417,9 @@ class ClipMasterPopup {
       this.clearAllItems();
     });
 
+    // Bulk operations event listeners
+    this.setupBulkOperationListeners();
+
     // Category cards
     document.querySelectorAll('.category-card').forEach(card => {
       card.addEventListener('click', (e) => {
@@ -568,16 +589,20 @@ class ClipMasterPopup {
       case 'templates':
         this.renderTemplatesList();
         break;
+      case 'analytics':
+        this.renderAnalyticsDashboard();
+        break;
     }
   }
 
+  /**
+   * Optimized rendering with virtual scrolling for 100+ items
+   */
   renderClipboardList(items, containerId) {
     const container = document.getElementById(containerId);
     
-    // Clear container safely
-    container.textContent = '';
-    
     if (items.length === 0) {
+      container.textContent = '';
       const noItemsDiv = document.createElement('div');
       noItemsDiv.className = 'no-items';
       noItemsDiv.textContent = 'No items found';
@@ -585,12 +610,149 @@ class ClipMasterPopup {
       return;
     }
 
-    // Create elements safely without innerHTML
+    // Use virtual scrolling for large datasets (100+ items)
+    if (items.length > 50) {
+      this.setupVirtualScrolling(container, items);
+    } else {
+      // Use regular rendering for smaller datasets
+      this.renderAllItems(container, items);
+    }
+  }
+
+  /**
+   * Setup virtual scrolling container and render visible items only
+   */
+  setupVirtualScrolling(container, items) {
+    // Clear and setup virtual scroll container
+    container.textContent = '';
+    container.style.position = 'relative';
+    container.style.height = '400px'; // Fixed height for scrolling
+    container.style.overflowY = 'auto';
+
+    // Create virtual content container
+    const virtualContainer = document.createElement('div');
+    virtualContainer.style.height = `${items.length * this.virtualScrolling.itemHeight}px`;
+    virtualContainer.style.position = 'relative';
+    
+    // Create visible items container
+    const visibleContainer = document.createElement('div');
+    visibleContainer.className = 'virtual-items-container';
+    visibleContainer.style.position = 'absolute';
+    visibleContainer.style.top = '0';
+    visibleContainer.style.width = '100%';
+    
+    virtualContainer.appendChild(visibleContainer);
+    container.appendChild(virtualContainer);
+
+    // Calculate visible items
+    this.virtualScrolling.visibleItems = Math.ceil(container.clientHeight / this.virtualScrolling.itemHeight);
+    
+    // Setup scroll listener for virtual scrolling
+    container.addEventListener('scroll', () => {
+      this.throttle(() => this.updateVirtualScroll(container, visibleContainer, items), 16);
+    });
+
+    // Initial render
+    this.updateVirtualScroll(container, visibleContainer, items);
+  }
+
+  /**
+   * Update virtual scroll - render only visible items
+   */
+  updateVirtualScroll(container, visibleContainer, items) {
+    if (this.isRendering) return;
+    this.isRendering = true;
+
+    requestAnimationFrame(() => {
+      const scrollTop = container.scrollTop;
+      const startIndex = Math.floor(scrollTop / this.virtualScrolling.itemHeight);
+      const endIndex = Math.min(
+        startIndex + this.virtualScrolling.visibleItems + this.virtualScrolling.bufferSize,
+        items.length
+      );
+
+      // Clear visible container
+      visibleContainer.textContent = '';
+      
+      // Set position offset
+      visibleContainer.style.transform = `translateY(${startIndex * this.virtualScrolling.itemHeight}px)`;
+
+      // Render visible items
+      for (let i = startIndex; i < endIndex; i++) {
+        const item = items[i];
+        if (item) {
+          const element = this.createOptimizedItemElement(item, i);
+          visibleContainer.appendChild(element);
+          this.addClipboardItemListeners(element);
+        }
+      }
+
+      this.isRendering = false;
+    });
+  }
+
+  /**
+   * Render all items for smaller datasets (< 50 items)
+   */
+  renderAllItems(container, items) {
+    // Clear container safely
+    container.textContent = '';
+    container.style.height = 'auto';
+    container.style.position = 'static';
+
+    // Batch DOM updates for better performance
+    const fragment = document.createDocumentFragment();
+    
     items.forEach(item => {
       const element = this.createClipboardItemElement(item);
-      container.appendChild(element);
-      this.addClipboardItemListeners(element);
+      fragment.appendChild(element);
     });
+    
+    container.appendChild(fragment);
+
+    // Add event listeners after all elements are in DOM
+    items.forEach((item, index) => {
+      const element = container.children[index];
+      if (element) {
+        this.addClipboardItemListeners(element);
+      }
+    });
+  }
+
+  /**
+   * Create optimized item element for virtual scrolling
+   */
+  createOptimizedItemElement(item, index) {
+    // Check cache first
+    const cacheKey = `${item.id}-${item.timestamp}`;
+    if (this.domCache.has(cacheKey)) {
+      return this.domCache.get(cacheKey).cloneNode(true);
+    }
+
+    const element = this.createClipboardItemElement(item);
+    
+    // Cache the element (limit cache size)
+    if (this.domCache.size < 100) {
+      this.domCache.set(cacheKey, element.cloneNode(true));
+    }
+
+    return element;
+  }
+
+  /**
+   * Throttle function for performance optimization
+   */
+  throttle(func, limit) {
+    let inThrottle;
+    return function() {
+      const args = arguments;
+      const context = this;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    }
   }
 
   createClipboardItemElement(item) {
@@ -626,10 +788,12 @@ class ClipMasterPopup {
     
     // Create action buttons
     const favoriteBtn = this.createActionButton('favorite-btn', '⭐', 'Toggle Favorite', item.favorite);
+    const formatBtn = this.createActionButton('format-btn', '🎨', 'Format Text');
     const copyBtn = this.createActionButton('copy-btn', '📋', 'Copy to Clipboard');
     const deleteBtn = this.createActionButton('delete-btn', '🗑️', 'Delete Item');
     
     itemActions.appendChild(favoriteBtn);
+    itemActions.appendChild(formatBtn);
     itemActions.appendChild(copyBtn);
     itemActions.appendChild(deleteBtn);
     
@@ -708,6 +872,12 @@ class ClipMasterPopup {
       this.toggleFavorite(itemId);
     });
 
+    // Format button
+    element.querySelector('.format-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.openFormatModal(itemId);
+    });
+
     // Delete button
     element.querySelector('.delete-btn').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -748,6 +918,14 @@ class ClipMasterPopup {
       }
 
       await navigator.clipboard.writeText(item.content);
+      
+      // Add visual feedback
+      const itemElement = document.querySelector(`[data-id="${itemId}"]`);
+      if (itemElement) {
+        itemElement.classList.add('copying');
+        setTimeout(() => itemElement.classList.remove('copying'), 600);
+      }
+      
       this.showToast('Copied to clipboard!', 'success');
       
       // Update usage statistics
@@ -889,6 +1067,14 @@ class ClipMasterPopup {
       const item = this.clipboardHistory.find(item => item.id === itemId);
       if (item) {
         item.favorite = !item.favorite;
+        
+        // Add visual feedback
+        const itemElement = document.querySelector(`[data-id="${itemId}"]`);
+        if (itemElement && item.favorite) {
+          itemElement.classList.add('favorited');
+          setTimeout(() => itemElement.classList.remove('favorited'), 500);
+        }
+        
         this.updateUI();
         this.showToast(item.favorite ? 'Added to favorites' : 'Removed from favorites', 'info');
       }
@@ -2068,22 +2254,241 @@ class ClipMasterPopup {
     }
   }
 
-  showToast(message, type = 'info') {
+  /**
+   * Enhanced notification system with multiple types and sound feedback
+   */
+  showToast(message, type = 'info', options = {}) {
+    const {
+      duration = 3000,
+      sound = this.settings.soundNotifications,
+      persistent = false,
+      actions = []
+    } = options;
+
+    // Create toast container if it doesn't exist
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+
+    // Create toast element
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.textContent = message;
     
-    const container = document.getElementById('toast-container');
+    // Create toast content
+    const toastContent = document.createElement('div');
+    toastContent.className = 'toast-content';
+    
+    // Add icon based on type
+    const icon = document.createElement('span');
+    icon.className = 'toast-icon';
+    icon.textContent = this.getToastIcon(type);
+    
+    // Add message
+    const messageSpan = document.createElement('span');
+    messageSpan.className = 'toast-message';
+    messageSpan.textContent = message;
+    
+    toastContent.appendChild(icon);
+    toastContent.appendChild(messageSpan);
+    
+    // Add action buttons if provided
+    if (actions.length > 0) {
+      const actionsContainer = document.createElement('div');
+      actionsContainer.className = 'toast-actions';
+      
+      actions.forEach(action => {
+        const button = document.createElement('button');
+        button.className = 'toast-action-btn';
+        button.textContent = action.text;
+        button.addEventListener('click', () => {
+          action.handler();
+          this.dismissToast(toast);
+        });
+        actionsContainer.appendChild(button);
+      });
+      
+      toastContent.appendChild(actionsContainer);
+    }
+    
+    // Add close button for persistent toasts
+    if (persistent) {
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'toast-close';
+      closeBtn.innerHTML = '&times;';
+      closeBtn.addEventListener('click', () => this.dismissToast(toast));
+      toastContent.appendChild(closeBtn);
+    }
+    
+    toast.appendChild(toastContent);
     container.appendChild(toast);
     
-    // Animate in
-    setTimeout(() => toast.classList.add('show'), 100);
+    // Play sound notification if enabled
+    if (sound) {
+      this.playNotificationSound(type);
+    }
     
-    // Remove after 3 seconds
+    // Animate in
+    requestAnimationFrame(() => {
+      toast.classList.add('show');
+    });
+    
+    // Auto-dismiss non-persistent toasts
+    if (!persistent) {
+      setTimeout(() => {
+        this.dismissToast(toast);
+      }, duration);
+    }
+    
+    // Return toast element for manual control
+    return toast;
+  }
+
+  /**
+   * Dismiss a toast notification
+   */
+  dismissToast(toast) {
+    if (!toast || !toast.parentNode) return;
+    
+    toast.classList.add('hiding');
     setTimeout(() => {
-      toast.classList.remove('show');
-      setTimeout(() => container.removeChild(toast), 300);
-    }, 3000);
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }
+
+  /**
+   * Get icon for toast type
+   */
+  getToastIcon(type) {
+    const icons = {
+      success: '✅',
+      error: '❌',
+      warning: '⚠️',
+      info: 'ℹ️',
+      loading: '⏳'
+    };
+    return icons[type] || 'ℹ️';
+  }
+
+  /**
+   * Play notification sound based on type
+   */
+  playNotificationSound(type) {
+    if (!this.settings.soundNotifications) return;
+    
+    try {
+      // Create audio context for Web Audio API
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      // Different frequencies for different notification types
+      const frequencies = {
+        success: [523.25, 659.25], // C5, E5
+        error: [220, 185], // A3, F#3
+        warning: [440, 554.37], // A4, C#5
+        info: [392, 523.25], // G4, C5
+        loading: [329.63] // E4
+      };
+      
+      const noteFreqs = frequencies[type] || frequencies.info;
+      this.playTones(noteFreqs);
+      
+    } catch (error) {
+      console.warn('Audio notification failed:', error);
+    }
+  }
+
+  /**
+   * Play sequence of tones for notification
+   */
+  playTones(frequencies) {
+    if (!this.audioContext) return;
+    
+    frequencies.forEach((freq, index) => {
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(freq, this.audioContext.currentTime);
+      oscillator.type = 'sine';
+      
+      // Set volume and duration
+      gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.1, this.audioContext.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.2);
+      
+      // Start and stop the tone
+      const startTime = this.audioContext.currentTime + (index * 0.1);
+      oscillator.start(startTime);
+      oscillator.stop(startTime + 0.2);
+    });
+  }
+
+  /**
+   * Show loading notification with progress
+   */
+  showLoadingToast(message, progressCallback) {
+    const toast = this.showToast(message, 'loading', { persistent: true });
+    
+    // Add progress bar
+    const progressBar = document.createElement('div');
+    progressBar.className = 'toast-progress';
+    const progressFill = document.createElement('div');
+    progressFill.className = 'toast-progress-fill';
+    progressBar.appendChild(progressFill);
+    
+    toast.querySelector('.toast-content').appendChild(progressBar);
+    
+    // Return update function
+    return {
+      updateProgress: (percent) => {
+        progressFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+      },
+      updateMessage: (newMessage) => {
+        toast.querySelector('.toast-message').textContent = newMessage;
+      },
+      complete: (successMessage) => {
+        this.dismissToast(toast);
+        if (successMessage) {
+          this.showToast(successMessage, 'success');
+        }
+      },
+      error: (errorMessage) => {
+        this.dismissToast(toast);
+        this.showToast(errorMessage, 'error');
+      }
+    };
+  }
+
+  /**
+   * Show confirmation dialog as toast
+   */
+  showConfirmToast(message, onConfirm, onCancel) {
+    return this.showToast(message, 'warning', {
+      persistent: true,
+      actions: [
+        {
+          text: 'Yes',
+          handler: () => {
+            if (onConfirm) onConfirm();
+          }
+        },
+        {
+          text: 'No',
+          handler: () => {
+            if (onCancel) onCancel();
+          }
+        }
+      ]
+    });
   }
 
   getTypeIcon(type) {
@@ -2120,6 +2525,932 @@ class ClipMasterPopup {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  /**
+   * Setup bulk operations event listeners
+   */
+  setupBulkOperationListeners() {
+    // Select all checkboxes
+    ['select-all-items', 'select-all-favorites'].forEach(id => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.addEventListener('change', (e) => {
+          this.toggleSelectAll(e.target.checked, id.includes('favorites'));
+        });
+      }
+    });
+
+    // Bulk action buttons
+    const bulkActions = [
+      { id: 'bulk-delete', handler: () => this.bulkDelete() },
+      { id: 'bulk-favorite', handler: () => this.bulkToggleFavorite(true) },
+      { id: 'bulk-unfavorite', handler: () => this.bulkToggleFavorite(false) },
+      { id: 'bulk-export', handler: () => this.bulkExport() },
+      { id: 'bulk-delete-favorites', handler: () => this.bulkDelete() },
+      { id: 'bulk-export-favorites', handler: () => this.bulkExport() }
+    ];
+
+    bulkActions.forEach(({ id, handler }) => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.addEventListener('click', handler);
+      }
+    });
+  }
+
+  /**
+   * Toggle bulk selection mode
+   */
+  toggleBulkMode(enabled = !this.bulkMode) {
+    this.bulkMode = enabled;
+    this.selectedItems.clear();
+    
+    // Show/hide bulk operations bars
+    const bulkBars = ['bulk-operations', 'bulk-operations-favorites'];
+    bulkBars.forEach(id => {
+      const bar = document.getElementById(id);
+      if (bar) {
+        bar.style.display = enabled ? 'flex' : 'none';
+      }
+    });
+
+    // Update clipboard items to show checkboxes
+    document.querySelectorAll('.clipboard-item').forEach(item => {
+      if (enabled) {
+        item.classList.add('bulk-mode');
+        this.addCheckboxToItem(item);
+      } else {
+        item.classList.remove('bulk-mode', 'selected');
+        const checkbox = item.querySelector('.clipboard-item-checkbox');
+        if (checkbox) checkbox.remove();
+      }
+    });
+
+    this.updateBulkSelectionCounts();
+  }
+
+  /**
+   * Add checkbox to clipboard item
+   */
+  addCheckboxToItem(itemElement) {
+    if (itemElement.querySelector('.clipboard-item-checkbox')) return;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'clipboard-item-checkbox';
+    checkbox.addEventListener('change', (e) => {
+      this.toggleItemSelection(itemElement.dataset.id, e.target.checked);
+    });
+
+    itemElement.style.position = 'relative';
+    itemElement.insertBefore(checkbox, itemElement.firstChild);
+  }
+
+  /**
+   * Toggle item selection
+   */
+  toggleItemSelection(itemId, selected) {
+    if (selected) {
+      this.selectedItems.add(itemId);
+    } else {
+      this.selectedItems.delete(itemId);
+    }
+
+    const itemElement = document.querySelector(`[data-id="${itemId}"]`);
+    if (itemElement) {
+      itemElement.classList.toggle('selected', selected);
+    }
+
+    this.updateBulkSelectionCounts();
+  }
+
+  /**
+   * Toggle select all items
+   */
+  toggleSelectAll(selectAll, isFavorites = false) {
+    const items = isFavorites ? 
+      this.clipboardHistory.filter(item => item.favorite) : 
+      this.filteredHistory;
+
+    items.forEach(item => {
+      this.toggleItemSelection(item.id, selectAll);
+      const checkbox = document.querySelector(`[data-id="${item.id}"] .clipboard-item-checkbox`);
+      if (checkbox) {
+        checkbox.checked = selectAll;
+      }
+    });
+
+    this.updateBulkSelectionCounts();
+  }
+
+  /**
+   * Update bulk selection counts
+   */
+  updateBulkSelectionCounts() {
+    const totalSelected = this.selectedItems.size;
+    
+    ['selected-count', 'selected-favorites-count'].forEach(id => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.textContent = totalSelected;
+      }
+    });
+
+    // Auto-hide bulk bar if no items selected
+    if (totalSelected === 0 && this.bulkMode) {
+      this.toggleBulkMode(false);
+    } else if (totalSelected > 0 && !this.bulkMode) {
+      this.toggleBulkMode(true);
+    }
+  }
+
+  /**
+   * Bulk delete selected items
+   */
+  async bulkDelete() {
+    if (this.selectedItems.size === 0) return;
+
+    // Check premium feature limit
+    if (!this.paymentManager.hasFeature('bulkOperations')) {
+      this.showUpgradeModal('bulk operations');
+      return;
+    }
+
+    const confirmed = confirm(`Delete ${this.selectedItems.size} selected items?`);
+    if (!confirmed) return;
+
+    try {
+      // Remove selected items from history
+      this.clipboardHistory = this.clipboardHistory.filter(
+        item => !this.selectedItems.has(item.id)
+      );
+
+      await this.saveClipboardHistory();
+      this.selectedItems.clear();
+      this.toggleBulkMode(false);
+      this.updateTabContent();
+      
+      this.showToast(`${this.selectedItems.size} items deleted`, 'success');
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      this.showToast('Failed to delete items', 'error');
+    }
+  }
+
+  /**
+   * Bulk toggle favorite status
+   */
+  async bulkToggleFavorite(favorite = true) {
+    if (this.selectedItems.size === 0) return;
+
+    // Check premium feature limit
+    if (!this.paymentManager.hasFeature('bulkOperations')) {
+      this.showUpgradeModal('bulk operations');
+      return;
+    }
+
+    try {
+      this.selectedItems.forEach(itemId => {
+        const item = this.clipboardHistory.find(h => h.id === itemId);
+        if (item) {
+          item.favorite = favorite;
+        }
+      });
+
+      await this.saveClipboardHistory();
+      this.selectedItems.clear();
+      this.toggleBulkMode(false);
+      this.updateTabContent();
+
+      const action = favorite ? 'added to' : 'removed from';
+      this.showToast(`${this.selectedItems.size} items ${action} favorites`, 'success');
+    } catch (error) {
+      console.error('Bulk favorite error:', error);
+      this.showToast('Failed to update favorites', 'error');
+    }
+  }
+
+  /**
+   * Bulk export selected items
+   */
+  async bulkExport() {
+    if (this.selectedItems.size === 0) return;
+
+    // Check premium feature limit
+    if (!this.paymentManager.hasFeature('advancedExport')) {
+      this.showUpgradeModal('export functionality');
+      return;
+    }
+
+    // Get selected items
+    const selectedData = this.clipboardHistory.filter(
+      item => this.selectedItems.has(item.id)
+    );
+
+    // Show export format modal
+    this.showExportModal(selectedData);
+  }
+
+  /**
+   * Show export format selection modal
+   */
+  showExportModal(data) {
+    // Create modal dynamically
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal export-modal">
+        <div class="modal-header">
+          <h3>Export ${data.length} Items</h3>
+          <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="export-options">
+            <label class="export-option">
+              <input type="radio" name="format" value="txt" checked>
+              <span>Plain Text (.txt)</span>
+            </label>
+            <label class="export-option">
+              <input type="radio" name="format" value="csv">
+              <span>CSV Spreadsheet (.csv)</span>
+            </label>
+            <label class="export-option">
+              <input type="radio" name="format" value="json">
+              <span>JSON Data (.json)</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary modal-cancel">Cancel</button>
+          <button class="btn-primary modal-export">Export</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Event listeners
+    modal.querySelector('.modal-close').addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+    
+    modal.querySelector('.modal-cancel').addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+
+    modal.querySelector('.modal-export').addEventListener('click', () => {
+      const format = modal.querySelector('input[name="format"]:checked').value;
+      this.exportData(data, format);
+      document.body.removeChild(modal);
+    });
+  }
+
+  /**
+   * Export data in specified format
+   */
+  exportData(data, format) {
+    let content = '';
+    let filename = '';
+    let mimeType = '';
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+
+    switch (format) {
+      case 'txt':
+        content = data.map(item => 
+          `[${new Date(item.timestamp).toLocaleString()}] ${item.type.toUpperCase()}\n${item.content}\n${'-'.repeat(50)}`
+        ).join('\n\n');
+        filename = `clipmaster-export-${timestamp}.txt`;
+        mimeType = 'text/plain';
+        break;
+
+      case 'csv':
+        const csvHeaders = 'Timestamp,Type,Content,Source,Favorite';
+        const csvRows = data.map(item => 
+          `"${item.timestamp}","${item.type}","${item.content.replace(/"/g, '""')}","${item.source || ''}","${item.favorite || false}"`
+        );
+        content = [csvHeaders, ...csvRows].join('\n');
+        filename = `clipmaster-export-${timestamp}.csv`;
+        mimeType = 'text/csv';
+        break;
+
+      case 'json':
+        content = JSON.stringify(data, null, 2);
+        filename = `clipmaster-export-${timestamp}.json`;
+        mimeType = 'application/json';
+        break;
+    }
+
+    // Download file
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    this.showToast(`Exported ${data.length} items as ${format.toUpperCase()}`, 'success');
+  }
+
+  /**
+   * Open text formatting modal
+   */
+  openFormatModal(itemId) {
+    const item = this.clipboardHistory.find(h => h.id === itemId);
+    if (!item) return;
+
+    this.currentFormatItem = item;
+    this.originalText = item.content;
+    this.currentFormattedText = item.content;
+
+    // Setup modal
+    const modal = document.getElementById('format-modal');
+    const previewText = document.getElementById('format-preview-text');
+    
+    previewText.value = this.currentFormattedText;
+    modal.classList.remove('hidden');
+
+    // Setup event listeners
+    this.setupFormatModalListeners();
+  }
+
+  /**
+   * Setup formatting modal event listeners
+   */
+  setupFormatModalListeners() {
+    // Format buttons
+    document.querySelectorAll('.format-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const action = e.target.dataset.action;
+        this.applyTextFormatting(action);
+      });
+    });
+
+    // Modal controls
+    document.getElementById('format-close').addEventListener('click', () => {
+      this.closeFormatModal();
+    });
+
+    document.getElementById('format-reset').addEventListener('click', () => {
+      this.resetFormatting();
+    });
+
+    document.getElementById('format-copy').addEventListener('click', () => {
+      this.copyFormattedText();
+    });
+
+    document.getElementById('format-apply').addEventListener('click', () => {
+      this.applyFormatting();
+    });
+  }
+
+  /**
+   * Apply text formatting transformation
+   */
+  applyTextFormatting(action) {
+    let text = this.currentFormattedText;
+
+    switch (action) {
+      case 'uppercase':
+        text = text.toUpperCase();
+        break;
+      case 'lowercase':
+        text = text.toLowerCase();
+        break;
+      case 'titlecase':
+        text = text.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+        break;
+      case 'sentencecase':
+        text = text.toLowerCase().replace(/(^\w|\.\s+\w)/g, l => l.toUpperCase());
+        break;
+      case 'trim':
+        text = text.trim();
+        break;
+      case 'removeextraspaces':
+        text = text.replace(/\s+/g, ' ').trim();
+        break;
+      case 'removelinebreaks':
+        text = text.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+        break;
+      case 'normalizelinebreaks':
+        text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        break;
+      case 'reverse':
+        text = text.split('').reverse().join('');
+        break;
+      case 'sort-lines':
+        text = text.split('\n').sort().join('\n');
+        break;
+      case 'remove-duplicates':
+        const lines = text.split('\n');
+        text = [...new Set(lines)].join('\n');
+        break;
+      case 'add-line-numbers':
+        const numberedLines = text.split('\n').map((line, index) => `${index + 1}. ${line}`);
+        text = numberedLines.join('\n');
+        break;
+      case 'escape-html':
+        text = this.escapeHTML(text);
+        break;
+      case 'unescape-html':
+        text = text
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'");
+        break;
+      case 'encode-url':
+        text = encodeURIComponent(text);
+        break;
+      case 'decode-url':
+        try {
+          text = decodeURIComponent(text);
+        } catch (e) {
+          this.showToast('Invalid URL encoding', 'error');
+          return;
+        }
+        break;
+    }
+
+    this.currentFormattedText = text;
+    document.getElementById('format-preview-text').value = text;
+
+    // Highlight the active button temporarily
+    const button = document.querySelector(`[data-action="${action}"]`);
+    if (button) {
+      button.classList.add('active');
+      setTimeout(() => button.classList.remove('active'), 300);
+    }
+  }
+
+  /**
+   * Reset formatting to original text
+   */
+  resetFormatting() {
+    this.currentFormattedText = this.originalText;
+    document.getElementById('format-preview-text').value = this.currentFormattedText;
+  }
+
+  /**
+   * Copy formatted text to clipboard without saving
+   */
+  async copyFormattedText() {
+    try {
+      await navigator.clipboard.writeText(this.currentFormattedText);
+      this.showToast('Formatted text copied to clipboard', 'success');
+      this.closeFormatModal();
+    } catch (error) {
+      console.error('Copy error:', error);
+      this.showToast('Failed to copy formatted text', 'error');
+    }
+  }
+
+  /**
+   * Apply formatting and save to clipboard history
+   */
+  async applyFormatting() {
+    if (!this.currentFormatItem) return;
+
+    try {
+      // Update the item content
+      this.currentFormatItem.content = this.currentFormattedText;
+      this.currentFormatItem.preview = this.currentFormattedText.substring(0, 100) + '...';
+      this.currentFormatItem.timestamp = new Date().toISOString();
+
+      // Save to storage
+      await this.saveClipboardHistory();
+      
+      // Update UI
+      this.updateTabContent();
+      
+      this.showToast('Text formatting applied and saved', 'success');
+      this.closeFormatModal();
+    } catch (error) {
+      console.error('Apply formatting error:', error);
+      this.showToast('Failed to apply formatting', 'error');
+    }
+  }
+
+  /**
+   * Close formatting modal
+   */
+  closeFormatModal() {
+    document.getElementById('format-modal').classList.add('hidden');
+    this.currentFormatItem = null;
+    this.originalText = '';
+    this.currentFormattedText = '';
+
+    // Remove event listeners to prevent memory leaks
+    document.querySelectorAll('.format-btn').forEach(btn => {
+      btn.replaceWith(btn.cloneNode(true));
+    });
+  }
+
+  /**
+   * Render comprehensive analytics dashboard
+   */
+  renderAnalyticsDashboard() {
+    // Check if user has premium analytics access
+    if (!this.paymentManager.hasFeature('analytics')) {
+      this.showAnalyticsUpgrade();
+      return;
+    }
+
+    const analytics = this.generateAnalytics();
+    this.updateAnalyticsOverview(analytics);
+    this.renderTypeDistributionChart(analytics.typeDistribution);
+    this.renderActivityChart(analytics.dailyActivity);
+    this.renderSourceStats(analytics.sourceStats);
+    this.renderTemplateUsageStats(analytics.templateStats);
+    this.renderProductivityInsights(analytics.insights);
+  }
+
+  /**
+   * Show analytics upgrade prompt for free users
+   */
+  showAnalyticsUpgrade() {
+    const dashboard = document.querySelector('.analytics-dashboard');
+    dashboard.innerHTML = `
+      <div class="premium-feature-prompt">
+        <div class="premium-icon">📊</div>
+        <h3>Premium Analytics Dashboard</h3>
+        <p>Get detailed insights into your clipboard usage patterns, productivity metrics, and optimization recommendations.</p>
+        <div class="feature-preview">
+          <div class="preview-item">📈 Daily activity trends</div>
+          <div class="preview-item">📋 Content type analysis</div>
+          <div class="preview-item">🔍 Source website tracking</div>
+          <div class="preview-item">⚡ Productivity insights</div>
+          <div class="preview-item">📊 Template usage statistics</div>
+        </div>
+        <button class="btn-primary upgrade-btn" onclick="window.clipMasterPopup.showUpgradeModal('analytics')">
+          Upgrade to Premium
+        </button>
+      </div>
+    `;
+  }
+
+  /**
+   * Generate comprehensive analytics data
+   */
+  generateAnalytics() {
+    const now = new Date();
+    const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Basic stats
+    const totalClips = this.clipboardHistory.length;
+    const clipsToday = this.clipboardHistory.filter(item => 
+      new Date(item.timestamp).toDateString() === now.toDateString()
+    ).length;
+    
+    const clipsLast7Days = this.clipboardHistory.filter(item => 
+      new Date(item.timestamp) >= last7Days
+    ).length;
+
+    // Type distribution
+    const typeDistribution = {};
+    this.clipboardHistory.forEach(item => {
+      typeDistribution[item.type] = (typeDistribution[item.type] || 0) + 1;
+    });
+
+    // Daily activity (last 7 days)
+    const dailyActivity = {};
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const dateStr = date.toDateString();
+      dailyActivity[dateStr] = this.clipboardHistory.filter(item =>
+        new Date(item.timestamp).toDateString() === dateStr
+      ).length;
+    }
+
+    // Source statistics
+    const sourceStats = {};
+    this.clipboardHistory.forEach(item => {
+      if (item.source) {
+        const source = typeof item.source === 'string' ? item.source : item.source.hostname || item.source.title || 'Unknown';
+        sourceStats[source] = (sourceStats[source] || 0) + 1;
+      }
+    });
+
+    // Template usage stats
+    const templateStats = this.templates.map(template => ({
+      name: template.name,
+      usageCount: template.usageCount || 0,
+      lastUsed: template.lastUsed || template.createdAt
+    })).sort((a, b) => b.usageCount - a.usageCount);
+
+    // Generate insights
+    const insights = this.generateProductivityInsights({
+      totalClips,
+      clipsToday,
+      clipsLast7Days,
+      typeDistribution,
+      sourceStats,
+      templateStats
+    });
+
+    return {
+      totalClips,
+      clipsToday,
+      avgDaily: Math.round(clipsLast7Days / 7),
+      mostUsedType: Object.keys(typeDistribution).reduce((a, b) => 
+        typeDistribution[a] > typeDistribution[b] ? a : b, 'text'
+      ),
+      typeDistribution,
+      dailyActivity,
+      sourceStats,
+      templateStats,
+      insights
+    };
+  }
+
+  /**
+   * Update analytics overview cards
+   */
+  updateAnalyticsOverview(analytics) {
+    document.getElementById('total-clips').textContent = analytics.totalClips;
+    document.getElementById('clips-today').textContent = analytics.clipsToday;
+    document.getElementById('avg-daily').textContent = analytics.avgDaily;
+    document.getElementById('most-used-type').textContent = 
+      analytics.mostUsedType.charAt(0).toUpperCase() + analytics.mostUsedType.slice(1);
+  }
+
+  /**
+   * Render type distribution chart
+   */
+  renderTypeDistributionChart(typeDistribution) {
+    const chartContainer = document.getElementById('type-chart');
+    chartContainer.innerHTML = '';
+
+    const total = Object.values(typeDistribution).reduce((sum, count) => sum + count, 0);
+    
+    Object.entries(typeDistribution).forEach(([type, count]) => {
+      const percentage = total > 0 ? (count / total * 100) : 0;
+      
+      const barContainer = document.createElement('div');
+      barContainer.className = 'chart-bar-container';
+      
+      const label = document.createElement('div');
+      label.className = 'chart-label';
+      label.textContent = `${type} (${count})`;
+      
+      const barWrapper = document.createElement('div');
+      barWrapper.className = 'chart-bar-wrapper';
+      
+      const bar = document.createElement('div');
+      bar.className = `chart-bar chart-bar-${type}`;
+      bar.style.width = `${percentage}%`;
+      bar.title = `${type}: ${count} items (${percentage.toFixed(1)}%)`;
+      
+      const percentageLabel = document.createElement('span');
+      percentageLabel.className = 'chart-percentage';
+      percentageLabel.textContent = `${percentage.toFixed(1)}%`;
+      
+      barWrapper.appendChild(bar);
+      barWrapper.appendChild(percentageLabel);
+      barContainer.appendChild(label);
+      barContainer.appendChild(barWrapper);
+      chartContainer.appendChild(barContainer);
+    });
+  }
+
+  /**
+   * Render daily activity chart
+   */
+  renderActivityChart(dailyActivity) {
+    const chartContainer = document.getElementById('activity-chart');
+    chartContainer.innerHTML = '';
+
+    const maxActivity = Math.max(...Object.values(dailyActivity), 1);
+    
+    Object.entries(dailyActivity).forEach(([date, count]) => {
+      const dayName = new Date(date).toLocaleDateString('en', { weekday: 'short' });
+      const height = (count / maxActivity) * 100;
+      
+      const barContainer = document.createElement('div');
+      barContainer.className = 'activity-bar-container';
+      
+      const bar = document.createElement('div');
+      bar.className = 'activity-bar';
+      bar.style.height = `${height}%`;
+      bar.title = `${dayName}: ${count} clips`;
+      
+      const label = document.createElement('div');
+      label.className = 'activity-label';
+      label.textContent = dayName;
+      
+      const count_label = document.createElement('div');
+      count_label.className = 'activity-count';
+      count_label.textContent = count;
+      
+      barContainer.appendChild(count_label);
+      barContainer.appendChild(bar);
+      barContainer.appendChild(label);
+      chartContainer.appendChild(barContainer);
+    });
+  }
+
+  /**
+   * Render source statistics
+   */
+  renderSourceStats(sourceStats) {
+    const container = document.getElementById('source-stats');
+    container.innerHTML = '';
+
+    const sortedSources = Object.entries(sourceStats)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10); // Top 10 sources
+
+    if (sortedSources.length === 0) {
+      container.innerHTML = '<div class="no-stats">No source data available</div>';
+      return;
+    }
+
+    sortedSources.forEach(([source, count]) => {
+      const sourceItem = document.createElement('div');
+      sourceItem.className = 'source-item';
+      
+      const sourceName = document.createElement('div');
+      sourceName.className = 'source-name';
+      sourceName.textContent = source;
+      
+      const sourceCount = document.createElement('div');
+      sourceCount.className = 'source-count';
+      sourceCount.textContent = count;
+      
+      sourceItem.appendChild(sourceName);
+      sourceItem.appendChild(sourceCount);
+      container.appendChild(sourceItem);
+    });
+  }
+
+  /**
+   * Render template usage statistics
+   */
+  renderTemplateUsageStats(templateStats) {
+    const container = document.getElementById('template-usage-stats');
+    container.innerHTML = '';
+
+    if (templateStats.length === 0) {
+      container.innerHTML = '<div class="no-stats">No templates created yet</div>';
+      return;
+    }
+
+    templateStats.slice(0, 5).forEach(template => {
+      const templateItem = document.createElement('div');
+      templateItem.className = 'template-stat-item';
+      
+      const templateInfo = document.createElement('div');
+      templateInfo.className = 'template-info';
+      
+      const templateName = document.createElement('div');
+      templateName.className = 'template-name';
+      templateName.textContent = template.name;
+      
+      const templateMeta = document.createElement('div');
+      templateMeta.className = 'template-meta';
+      templateMeta.textContent = `Used ${template.usageCount} times`;
+      
+      templateInfo.appendChild(templateName);
+      templateInfo.appendChild(templateMeta);
+      
+      const usageBar = document.createElement('div');
+      usageBar.className = 'template-usage-bar';
+      const maxUsage = Math.max(...templateStats.map(t => t.usageCount), 1);
+      const width = (template.usageCount / maxUsage) * 100;
+      usageBar.style.width = `${width}%`;
+      
+      templateItem.appendChild(templateInfo);
+      templateItem.appendChild(usageBar);
+      container.appendChild(templateItem);
+    });
+  }
+
+  /**
+   * Generate AI-powered productivity insights
+   */
+  generateProductivityInsights(data) {
+    const insights = [];
+    
+    // Activity patterns
+    if (data.avgDaily < 5) {
+      insights.push({
+        type: 'tip',
+        title: 'Low Usage Detected',
+        message: 'You could benefit from using ClipMaster more frequently. Try setting up keyboard shortcuts for faster access.'
+      });
+    } else if (data.avgDaily > 50) {
+      insights.push({
+        type: 'warning',
+        title: 'High Activity',
+        message: 'Consider organizing your clips with favorites and templates for better efficiency.'
+      });
+    }
+
+    // Type distribution insights
+    const { typeDistribution } = data;
+    const urlPercentage = (typeDistribution.url || 0) / data.totalClips * 100;
+    if (urlPercentage > 40) {
+      insights.push({
+        type: 'suggestion',
+        title: 'URL Heavy Usage',
+        message: 'You copy many URLs. Consider using bookmark management for better organization.'
+      });
+    }
+
+    // Template insights
+    if (data.templateStats.length === 0) {
+      insights.push({
+        type: 'feature',
+        title: 'Templates Opportunity',
+        message: 'Create templates for frequently used text to save time and ensure consistency.'
+      });
+    } else if (data.templateStats.length > 0 && data.templateStats[0].usageCount === 0) {
+      insights.push({
+        type: 'reminder',
+        title: 'Unused Templates',
+        message: 'You have templates that haven\'t been used. Consider deleting unused ones or promoting their usage.'
+      });
+    }
+
+    // Source diversity
+    const sourceCount = Object.keys(data.sourceStats).length;
+    if (sourceCount > 20) {
+      insights.push({
+        type: 'insight',
+        title: 'Diverse Sources',
+        message: `You copy from ${sourceCount} different sources. This shows good research habits!`
+      });
+    }
+
+    // Time-based insights
+    if (data.clipsToday === 0 && data.totalClips > 10) {
+      insights.push({
+        type: 'engagement',
+        title: 'No Activity Today',
+        message: 'Start your productive day by copying something useful to your clipboard!'
+      });
+    }
+
+    return insights;
+  }
+
+  /**
+   * Render productivity insights
+   */
+  renderProductivityInsights(insights) {
+    const container = document.getElementById('productivity-insights');
+    container.innerHTML = '';
+
+    if (insights.length === 0) {
+      container.innerHTML = '<div class="no-insights">Looking good! Check back later for more insights.</div>';
+      return;
+    }
+
+    insights.forEach(insight => {
+      const insightItem = document.createElement('div');
+      insightItem.className = `insight-item insight-${insight.type}`;
+      
+      const insightIcon = document.createElement('div');
+      insightIcon.className = 'insight-icon';
+      insightIcon.textContent = this.getInsightIcon(insight.type);
+      
+      const insightContent = document.createElement('div');
+      insightContent.className = 'insight-content';
+      
+      const insightTitle = document.createElement('div');
+      insightTitle.className = 'insight-title';
+      insightTitle.textContent = insight.title;
+      
+      const insightMessage = document.createElement('div');
+      insightMessage.className = 'insight-message';
+      insightMessage.textContent = insight.message;
+      
+      insightContent.appendChild(insightTitle);
+      insightContent.appendChild(insightMessage);
+      insightItem.appendChild(insightIcon);
+      insightItem.appendChild(insightContent);
+      container.appendChild(insightItem);
+    });
+  }
+
+  /**
+   * Get icon for insight type
+   */
+  getInsightIcon(type) {
+    const icons = {
+      tip: '💡',
+      warning: '⚠️',
+      suggestion: '🎯',
+      feature: '✨',
+      reminder: '🔔',
+      insight: '🧠',
+      engagement: '🚀'
+    };
+    return icons[type] || '📊';
   }
 }
 
